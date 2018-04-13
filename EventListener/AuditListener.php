@@ -2,28 +2,29 @@
 
 namespace Stof\DoctrineExtensionsBundle\EventListener;
 
-use Gedmo\Loggable\LoggableListener;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\GetResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Gedmo\Exception\InvalidSecurityToken;
+use Gedmo\Auditable\AuditableListener;
 
 /**
- * Sets the username from the security context by listening on kernel.request
+ * Sets the facility from the security context token by listening on kernel.request
  *
- * @author Christophe Coevoet <stof@notk.org>
+ * @author David Buchmann <mail@davidbu.ch>
  */
-class LoggerListener implements EventSubscriberInterface
+class AuditListener implements EventSubscriberInterface
 {
     private $authorizationChecker;
     private $tokenStorage;
-    private $loggableListener;
+    private $auditableListener;
 
-    public function __construct(LoggableListener $loggableListener, TokenStorageInterface $tokenStorage = null, AuthorizationCheckerInterface $authorizationChecker = null)
+    public function __construct(AuditableListener $auditableListener, TokenStorageInterface $tokenStorage = null, AuthorizationCheckerInterface $authorizationChecker = null)
     {
-        $this->loggableListener = $loggableListener;
+        $this->auditableListener = $auditableListener;
         $this->tokenStorage = $tokenStorage;
         $this->authorizationChecker = $authorizationChecker;
     }
@@ -42,10 +43,12 @@ class LoggerListener implements EventSubscriberInterface
         }
 
         $token = $this->tokenStorage->getToken();
-
+        
         if (null !== $token && $this->authorizationChecker->isGranted('IS_AUTHENTICATED_REMEMBERED')) {
-            $this->loggableListener->setUsername($token);
-            $this->loggableListener->setFacility($token);
+            if(!method_exists($token, 'getFacility')) {
+                throw new InvalidSecurityToken(get_class($token));
+            }
+            $this->auditableListener->setFacilityValue($token->getFacility());
         }
     }
 
